@@ -68,7 +68,7 @@ i:    &a7 {type: http,     behavior: ipcidr,    interval: 86400}
 proxy-providers:
   Subscribe:
     <<: *a1
-    url: https://sub.xeton.dev/sub?target=clash&url=https://dingyue.wenlianyun.vip/api/v1/client/subscribe?token=b26204a2cb40f35bc1aec38a3a49e05a&security=ff679a2f3e71d9181&list=true&udp=false 
+    url: https://sub.xeton.dev/sub?target=clash&url=http://www.gstatic.com/generate_204&list=true&udp=false 
     path: ./proxy_providers/tmp.yaml
 
 
