@@ -68,15 +68,8 @@ i:    &a7 {type: http,     behavior: ipcidr,    interval: 86400}
 proxy-providers:
   Subscribe:
     <<: *a1
-    url: https://dingyue.wenlianyun.vip/api/v1/client/subscribe?token=d45effe559e11a6c13e9c1d234562650&security=a5320fa475530d958
+    url: https://sub.xeton.dev/sub?target=clash&url=https%3A%2F%2Fdingyue.wenlianyun.vip%2Fapi%2Fv1%2Fclient%2Fsubscribe%3Ftoken%3Dd45effe559e11a6c13e9c1d234562650%26security%3Da5320fa475530d958&insert&list=true&udp=false 
     path: ./proxy_providers/tmp.yaml
-proxies:
-  - name: "Proxy"
-    type: http
-    server: serveraddress
-    port: 1234
-    username: username
-    password: password
 
 
 
