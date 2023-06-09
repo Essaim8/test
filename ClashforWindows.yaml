@@ -70,6 +70,14 @@ proxy-providers:
     <<: *a1
     url: https://dingyue.wenlianyun.vip/api/v1/client/subscribe?token=d45effe559e11a6c13e9c1d234562650&security=a5320fa475530d958
     path: ./proxy_providers/tmp.yaml
+proxies:
+  - name: "Proxy"
+    type: http
+    server: serveraddress
+    port: 1234
+    username: username
+    password: password
+
 
 
 proxies: null
