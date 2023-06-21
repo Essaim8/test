@@ -1,0 +1,11 @@
+#!name=酷我音乐
+#!desc=解锁酷我音乐年费
+#!author=@Essaim
+#!icon=https://github.com/Essaim8/test/blob/main/icon/kuwo.png?raw=true
+#!other=KuWoMusic.Loon.plugin
+
+[Script]
+http-response ^https?:\/\/.*\.(kuwo|lrts)\.(cn|me)\/(a\.p|music\.pay|(vip\/(v2|enc)\/(theme|user\/vip))|(EcomResource|(Mobile)?Ad)Serv(er|ice)).* script-path=https://raw.githubusercontent.com/nameking77/Qx/main/rewrite/kw.js,requires-body=true, timeout=10, tag=酷我音乐
+
+[MITM]
+hostname = *.kuwo.cn, *.lrts.me
