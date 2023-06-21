@@ -1,8 +1,6 @@
 #!name=网易云音乐解锁
 #!desc=解锁网易云音乐黑胶会员歌曲
-#!openUrl=
-#!author=Essaim
-#!homepage=https://github.com/I-am-R-E/Functional-Store-Hub/tree/Master/KuWoMusic
+#!author=@Essaim
 #!icon=https://gitlab.com/lodepuly/iconlibrary/-/raw/master/App_icon/120px/NeteaseCloudMusic.png
 #!other=NeteaseCloudMusic.Loon.plugin
 
