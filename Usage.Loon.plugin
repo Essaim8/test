@@ -1,0 +1,12 @@
+#!name=Usage解锁
+#!desc=Usage解锁
+#!author=@Essaim
+#!icon=https://raw.githubusercontent.com/Essaim8/test/main/icon/usage.png
+#!other=Usage.Loon.plugin
+
+
+[Script]
+http-response ^https:\/\/api\.revenuecat\.com\/v1\/subscribers.+ script-path=https://raw.githubusercontent.com/89996462/Quantumult-X/main/ycdz/Usage.js, requires-body=true, timeout=60, tag=Usage_13
+
+[mitm] 
+hostname = api.revenuecat.com
