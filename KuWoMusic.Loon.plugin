@@ -1,7 +1,7 @@
 #!name=酷我音乐
 #!desc=解锁酷我音乐年费
 #!author=@Essaim
-#!icon=https://github.com/Essaim8/test/blob/main/icon/kuwo.png?raw=true
+#!icon=https://raw.githubusercontent.com/Essaim8/test/main/icon/kuwo.png
 #!other=KuWoMusic.Loon.plugin
 
 [Script]
