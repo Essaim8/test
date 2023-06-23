@@ -4,7 +4,7 @@
 #!author = Keywos
 #!update =2023-05-29 18:29:25
 
-hostname = imeres.baidu.com, mbd.baidu.com, mime.baidu.com,m.baidu.com ,www.baidu.com
+hostname = imeres.baidu.com, mbd.baidu.com, mime.baidu.com
 
 ^https?:\/\/mime\.baidu\.com\/(imrobot\/v1\/pub\/relation\/get_robot_list|v5\/custom_page\/(layout|getdata)) url script-response-body https://raw.githubusercontent.com/Keywos/rule/main/JS/bdsrf.js
 # 百度输入法开屏
