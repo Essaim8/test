@@ -97,7 +97,7 @@ pr:
     - 🇸🇬 狮城节点
     - 🇰🇷 韩国节点
     - ✈️ 其他节点
-    - ✈️ GPT
+    - ✈️ GPT节点
     - DIRECT
 
 # 订阅更新和延迟测试相关
@@ -181,7 +181,7 @@ proxy-groups:
   - {name: 🎮 游戏平台, <<: *pr}
   - {name: 🌏 全球加速, <<: *pr}
   - {name: 🐟 兜底分流, <<: *pr}
-  - {name: ✈️ GPT节点, <<: *auto}
+  - {name: ✈️ GPT节点, <<: *auto, *use, filter: "(?i)gpt"}
 # 节点地区分组
   - {name: 🇭🇰 香港节点, <<: *use, filter: "港|HK|(?i)Hong"}
   - {name: 🇨🇳 台湾节点, <<: *use, filter: "台|湾|TW|(?i)Taiwan"}
@@ -190,7 +190,6 @@ proxy-groups:
   - {name: 🇸🇬 狮城节点, <<: *use, filter: "新加|坡|SG|(?i)Singapore"}
   - {name: 🇰🇷 韩国节点, <<: *use, filter: "韩|韓|首尔|KR|(?i)Korea"}
   - {name: ✈️ 其他节点, <<: *use, filter: "^[^香台美本坡韩]*$"}
-  - {name: ✈️ GPT, <<: *use, filter: "(?i)gpt", *auto}
 #  - {name: ✈️ 其他节点, <<: *use, filter: "^((?!香|台|美|日本|新加坡|韩).)*$"}    # 需要meta内核
 
 
