@@ -1,0 +1,11 @@
+#!desc=哔站字幕繁转简
+#!author=@Essaim
+#!icon=https://gitlab.com/lodepuly/iconlibrary/-/raw/master/App_icon/120px/Bilibili.png
+#!other=bilibili.Loon.plugin
+
+
+[Script]
+http-response ^https?:\/\/.*\.hdslb\.com\/bfs\/subtitle\/.+\.json script-path=https://raw.githubusercontent.com/Essaim8/test/main/bilibili_cc.js, requires-body=true, timeout=60, tag=bilibili_cc_16
+
+[mitm] 
+hostname = aisubtitle.hdslb.com,i0.hdslb.com
