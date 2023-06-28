@@ -181,7 +181,7 @@ proxy-groups:
   - {name: 🎮 游戏平台, <<: *pr}
   - {name: 🌏 全球加速, <<: *pr}
   - {name: 🐟 兜底分流, <<: *pr}
-  - {name: ✈️ GPT, <<: *auto}
+  - {name: ✈️ GPT节点, <<: *auto}
 # 节点地区分组
   - {name: 🇭🇰 香港节点, <<: *use, filter: "港|HK|(?i)Hong"}
   - {name: 🇨🇳 台湾节点, <<: *use, filter: "台|湾|TW|(?i)Taiwan"}
