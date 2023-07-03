@@ -1,0 +1,8 @@
+#!name=伟人微信读书
+
+
+[Script]
+http-response ^http[s]?:\/\/(i|res)\.weread\.qq.com\/(login|pay\/balance|book\/chapterInfos|user\/profile\?articleBookId|upload\?type\=avatar).*$ script-path=https://raw.githubusercontent.com/WeiRen0/Scripts/main/wxds.js, requires-body=true, timeout=60, tag=wxds_14
+
+
+
