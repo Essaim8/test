@@ -1,17 +1,3 @@
-#==========================================
-# @ConfigName        墨鱼自用Clash配置文件
-# @Author            @ddgksf2013
-# @TgChannel         𝐡𝐭𝐭𝐩𝐬://𝐭.𝐦𝐞/𝐝𝐝𝐠𝐤𝐬𝐟𝟐𝟎𝟐𝟏
-# @WechatID          公众号墨鱼手记
-# @Feedback          💡请通过邮件反馈问题[其它方式一概无视]：𝐝𝐝𝐠𝐤𝐬𝐟𝟐𝟎𝟏𝟑@𝟏𝟔𝟑.𝐜𝐨𝐦 💡
-# @UpdateTime        2023/07/08 14:50 UTC/GMT +8
-# @Function          支持手动选择、自动测速、广告屏蔽、兜底分流、按国家分组节点等等   
-# @ClashDownload     https://github.com/Fndroid/clash_for_windows_pkg/releases
-# @Thanks            @blackmatrix7, @Fndroid, @Anti
-# @Attention         𝐏𝐥𝐞𝐚𝐬𝐞 𝐮𝐬𝐞 𝐭𝐡𝐞 𝐥𝐚𝐭𝐞𝐬𝐭 𝐯𝐞𝐫𝐬𝐢𝐨𝐧 𝐨𝐟 𝐂𝐥𝐚𝐬𝐡𝐟𝐨𝐫𝐖𝐢𝐧𝐝𝐨𝐰𝐬
-# @ConfigVersion     1.0.15
-#==========================================
-
 port: 7890           # HTTP 代理端口
 socks-port: 7891     # Socks 端口
 redir-port: 7892     # Redir 端口
@@ -69,7 +55,7 @@ i:    &a7 {type: http,     behavior: ipcidr,    interval: 86400}
 proxy-providers:
   Subscribe:
     <<: *a1
-    url: https://dingyue.wenlianyun.vip/api/v1/client/subscribe?token=59fd2b391669ae12d217c99f494aca26&security=d8cd98f00b204e980
+    url: https://sub.xeton.dev/sub?target=clash&new_name=true&url=https%3A%2F%2Fdingyue.wenlianyun.vip%2Fapi%2Fv1%2Fclient%2Fsubscribe%3Ftoken%3D59fd2b391669ae12d217c99f494aca26%26security%3Dd8cd98f00b204e980&list=true&udp=false
     path: ./proxy_providers/tmp.yaml
     # URL后面填写格式1: 直接填写你的机场Clash订阅[单一订阅][推荐此种方式，避免订阅泄露]
     # URL后面填写格式2：https://sub.xeton.dev/sub?target=clash&url=请手动填入你的订阅[多机场订阅用|分割即可]&list=true&udp=false  
@@ -81,7 +67,7 @@ proxy-groups:
   - {name: 🌏 全球加速, <<: *a3}
   - {name: 🍎 苹果服务, <<: *a3}
   - {name: 📺 哔哩哔哩, type: select, proxies: [DIRECT, 🇭🇰 香港节点, 🇨🇳 台湾节点]}
-  - {name: 🤖 OpenAi,   type: select, proxies: ✈️ GPT节点,🚀 手动切换}
+  - {name: 🤖 OpenAi,   type: select, proxies: [🚀 手动切换,✈️ GPT节点]}
   - {name: 🎬 国际媒体, <<: *a3}
   - {name: 🌌 谷歌服务, <<: *a3}
   - {name: 📟 电报消息, <<: *a3}
