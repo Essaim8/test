@@ -55,7 +55,7 @@ i:    &a7 {type: http,     behavior: ipcidr,    interval: 86400}
 proxy-providers:
   Subscribe:
     <<: *a1
-    url: https://api.nexconvert.com/sub?target=clash&url=https://muguacloud.top/api/v1/client/subscribe?token=ee4322a9b04e9d41861b23fb0b6451b2&emoji=true&list=true&new_name=true&udp=false&out=CN
+    url: https://api.nexconvert.com/sub?target=clash&url=https://dingyue.wenlianyun.vip/api/v1/client/subscribe?token=59fd2b391669ae12d217c99f494aca26&security=d8cd98f00b204e980&emoji=true&list=true&new_name=true&udp=false
     path: ./proxy_providers/tmp.yaml
     # URL后面填写格式1: 直接填写你的机场Clash订阅[单一订阅][推荐此种方式，避免订阅泄露]
     # URL后面填写格式2：https://sub.xeton.dev/sub?target=clash&url=请手动填入你的订阅[多机场订阅用|分割即可]&list=true&udp=false  
