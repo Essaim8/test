@@ -154,7 +154,7 @@ i:
 proxy-providers:
   Subscribe:
     <<: *p
-    url: https://sub.xeton.dev/sub?target=clash&new_name=true&url=https%3A%2F%2Fdingyue.wenlianyun.vip%2Fapi%2Fv1%2Fclient%2Fsubscribe%3Ftoken%3D59fd2b391669ae12d217c99f494aca26%26security%3Dd8cd98f00b204e980&list=true&udp=false
+    url: https://gist.githubusercontent.com/Essaim8/73e431fd1a8b08ee22a3277c9ec48d46/raw/333
     path: ./proxy_providers/tmp.yaml
     interval: 21600
     health-check:
