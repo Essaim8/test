@@ -1,11 +1,11 @@
 #!name=APTV Pro 解锁
-#!desc=解锁 APTV (com.kimen.aptvpro) 的 Pro。原理：会员状态来自 RevenueCat，唯一权益标识是 pro（对应终身买断商品 com.kimen.aptvpro.lifetime）。App 通过自有反代 api.rc-backup.com 访问 RevenueCat，本插件把 CustomerInfo 接口返回成已购买 Pro。需开启 MitM。
+#!desc=解锁 APTV (com.kimen.aptvpro) 的 Pro。原理：会员状态来自 RevenueCat，唯一权益标识是 pro（对应终身买断商品 com.kimen.aptvpro.lifetime）。App 通过自有反代 api.rc-backup.com 访问 RevenueCat，本插件把 CustomerInfo 接口返回成已购买 Pro。需开启 MitM。本版带自证日志：脚本每次被调用都会写日志，在 Loon「脚本日志」里搜 APTV-Pro 即可判断卡在哪一步。
 #!author=@Essaim
 #!icon=https://raw.githubusercontent.com/Essaim8/test/main/icon/aptv.png
 #!other=APTV.Loon.plugin
 
 [Script]
-http-response ^https?:\/\/(api\.revenuecat\.com|api\.rc-backup\.com)\/v1\/subscribers\/[^\/?]+(\?.*)?$ script-path=https://raw.githubusercontent.com/Essaim8/test/main/APTVPro.js, requires-body=true, timeout=30, tag=APTV-Pro
+http-response ^https?:\/\/(api\.revenuecat\.com|api\.rc-backup\.com)\/ script-path=https://raw.githubusercontent.com/Essaim8/test/main/APTVPro.js, requires-body=true, timeout=30, tag=APTV-Pro
 
 [MitM]
 hostname = api.rc-backup.com, api.revenuecat.com

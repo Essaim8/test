@@ -1,33 +1,24 @@
 /*
- * APTV (com.kimen.aptvpro) —— Pro 解锁脚本
+ * APTV (com.kimen.aptvpro) —— Pro 解锁脚本（带自证日志版）
  * Target : api.rc-backup.com / api.revenuecat.com   (RevenueCat)
  * Type   : Loon http-response script (requires-body = true)
  *
  * 依据：
- *   · 包体带 RevenueCat_RevenueCat.bundle；二进制里 RC 公钥与
- *     "https://api.rc-backup.com/" 在 __cstring 里紧邻（App 设了 Purchases.proxyURL），
- *     所以实际请求走的是反代域名，不是 api.revenuecat.com。
+ *   · 包体带 RevenueCat_RevenueCat.bundle；RC 公钥与 "https://api.rc-backup.com/"
+ *     在 __cstring 里紧邻（App 设了 Purchases.proxyURL），真实流量走反代域名。
  *   · 用该公钥问官方接口拿到权威映射：
  *       GET https://api.revenuecat.com/v1/product_entitlement_mapping
  *       Authorization: Bearer appl_XLnjzAnooYgJCnswSNBaQsnwJrZ
  *     → {"com.kimen.aptvpro.lifetime":{"entitlements":["pro"]}}
- *     即唯一商品是终身买断 lifetime，唯一权益标识是 "pro"。
+ *   · 二进制里 setErrorHandler 出现 0 次；官方文档 + purchases-ios 源码（Signing.swift /
+ *     HTTPClient）确认唯一硬拦截是 App 显式配置 .enforced 时把验签失败升级成 NetworkError。
  *
- * 为什么可以伪造：
- *   · 二进制里没有 setErrorHandler（那 3 处 errorHandler 分别属于
- *     NSFileManager / UISceneGeometry / SwiftUI 的字段元数据，是误报）。
- *   · RevenueCat 官方文档：iOS 5.15+ 默认开启 Trusted Entitlements，
- *     但结果"仅供参考"，SDK 不会自动拒绝未验签数据。
- *   · 读 purchases-ios 源码确认唯一的硬拦截只有一处：
- *       if response.verificationResult.isFailed, case .enforced:
- *           return .failure(.signatureVerificationFailed(...))
- *     即只有在 App 显式配置 .enforced 时请求才会整个失败；
- *     默认的 .informational 会把数据照常交给 App。
- *   · 因此本脚本**不返回 x-signature**（去伪造一个必然验签失败的签名没有意义，
- *     缺签名比错签名更接近"未请求验证"）。
- *
- * 做法：只拦 CustomerInfo 本体 GET /v1/subscribers/<app_user_id>，
- *      /offerings、/product_entitlement_mapping、POST /receipts 等一律放行。
+ * 本版新增「自证日志」：
+ *   插件的 [Script] 正则放宽到整个 RC 域名，脚本每次被调用都会 console.log 一行。
+ *   在 Loon「脚本日志」里搜 APTV-Pro 即可判断卡在哪一步：
+ *     · 一条都没有            → MitM 没生效 / 域名没进列表（插件根本没被调用）
+ *     · 有 GET /v1/... 但没有 FORGE  → 路径正则没命中，把日志发我
+ *     · 出现 [FORGE] 仍未解锁 → 拦截成功，问题在 App 侧（验签策略或别的判定）
  */
 
 (function () {
@@ -36,6 +27,8 @@
     var ENTITLEMENT   = 'pro';
     var PRODUCT_ID    = 'com.kimen.aptvpro.lifetime';
     var PURCHASE_DATE = '2026-01-01T10:00:00Z';
+    var HOSTS         = /^https?:\/\/(?:api\.rc-backup\.com|api\.revenuecat\.com)\//i;
+    var TARGET        = /^https?:\/\/(?:api\.rc-backup\.com|api\.revenuecat\.com)\/v1\/subscribers\/([^\/?#]+)(?:[?#].*)?$/i;
 
     function nowISO() {
         return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -44,11 +37,23 @@
     var url    = ($request && $request.url)    ? String($request.url)    : '';
     var method = ($request && $request.method) ? String($request.method).toUpperCase() : 'GET';
 
-    // 只匹配 CustomerInfo 本体，不吞 /offerings 等子路径
-    // 域名白名单不依赖插件的 [Script] 正则：脚本自身也要挡一道，
-    // 否则同一路径被别的 App 用到时会被误伤。
-    var m = url.match(/^https?:\/\/(?:api\.rc-backup\.com|api\.revenuecat\.com)\/v1\/subscribers\/([^\/?#]+)(?:[?#].*)?$/i);
+    // 脚本被调用了就留痕，便于在 Loon 脚本日志里定位
+    console.log('[APTV-Pro] CALL ' + method + ' ' + url.split('?')[0]);
+
+    if (!HOSTS.test(url)) {
+        $done({});
+        return;
+    }
+
+    var orig = ($response && $response.body) ? String($response.body) : '';
+    console.log('[APTV-Pro] RESP status=' + (($response && $response.status) || '?') +
+                ' len=' + orig.length + ' head=' + orig.slice(0, 200));
+
+    // 只改 CustomerInfo 本体，其余（/offerings、/product_entitlement_mapping、
+    // POST /receipts 等）原样放行
+    var m = url.match(TARGET);
     if (!m || method !== 'GET') {
+        console.log('[APTV-Pro] PASS');
         $done({});
         return;
     }
@@ -86,7 +91,7 @@
         store: 'app_store'
     };
 
-    // 与商品目录一致：lifetime 属 non_subscriptions，不编造订阅记录
+    // 与商品目录保持一致：lifetime 属 non_subscriptions，不编造订阅记录
     subscriber.non_subscriptions[PRODUCT_ID] = [{
         id: 'aptv-lifetime-0001',
         is_sandbox: false,
@@ -94,6 +99,8 @@
         store: 'app_store',
         store_transaction_identifier: 'aptv-lifetime-0001'
     }];
+
+    console.log('[APTV-Pro] FORGE user=' + appUserId);
 
     $done({
         status: 200,
