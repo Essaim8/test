@@ -1,6 +1,7 @@
 #!name=发车格会员解锁
 #!desc=解锁发车格(StartingGrid / com.f1.push.ios)全部 VIP 权益。原理：App 只在「响应体是 AES-GCM 信封」或「响应头带 X-F1-Crypto-Response: 1」时才解密，本插件把会员接口响应改写成明文有效会员 JSON 并替换响应头。不改安装包、无需越狱。使用前需先登录手机号账号。
 #!author=@Essaim
+#!icon=https://raw.githubusercontent.com/Essaim8/test/main/icon/startinggrid.png
 #!other=StartingGrid.Loon.plugin
 
 [Script]
