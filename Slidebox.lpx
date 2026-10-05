@@ -1,0 +1,11 @@
+#!name=Slidebox Pro 解锁
+#!desc=解锁 Slidebox (co.slidebox.Slidebox) 的 Pro。原理：App 的业务门禁是「真实购买 OR 远程配置强制开关」，本插件把 Firebase Remote Config 里 App 自带的 ios_force_premium_enabled 置为 true，其余配置项原样保留。需开启 MitM。
+#!author=@Essaim
+#!icon=https://raw.githubusercontent.com/Essaim8/test/main/icon/slidebox.png
+#!other=Slidebox.Loon.plugin
+
+[Script]
+http-response ^https?:\/\/firebaseremoteconfig\.googleapis\.com\/ script-path=https://raw.githubusercontent.com/Essaim8/test/main/SlideboxPro.js, requires-body=true, timeout=30, tag=Slidebox-Pro
+
+[MitM]
+hostname = firebaseremoteconfig.googleapis.com
