@@ -1,25 +1,23 @@
 /*
  * Scrollie (com.foamzou.scrollie) —— Pro 解锁脚本
- * Target : api.rc-backup.com / api.revenuecat.com  (RevenueCat)
- * Type   : Loon http-response script (不需要 requires-body)
+ * Target : api.rc-backup.com / api.revenuecat.com   (RevenueCat)
+ * Type   : Loon response 脚本（新版语法，requires_body = true）
  *
- * 背景（实测）：
- *   - 会员状态来自 RevenueCat，唯一权益标识是 "Scrollie Pro"
- *     （用 App 内置的公钥问 /v1/product_entitlement_mapping 得到：
- *      com.foamzou.scrollie.{lifetime,monthly,yearly} -> ["Scrollie Pro"]）
- *   - App 自己把 Purchases.proxyURL 指到 https://api.rc-backup.com/，
- *     所以 SDK 的请求实际打到 rc-backup 这个域名。
- *   - RevenueCat 的 Trusted Entitlements 默认只是「informational」：
- *     官方文档明确写 SDK 不会因为验签失败而拒绝数据，是否处理由 App 自己决定；
- *     这个 App 没有用 Purchases.errorHandler，也没有引用 verificationResult，
- *     所以伪造 CustomerInfo 是有效的。
+ * 依据：
+ *   · 包内 Info.plist 写明 REVENUECAT_API_KEY = appl_aOOUjqoPlLVIRlNvmbaYqeEnfWV，
+ *     且 App 把 Purchases.proxyURL 指到 https://api.rc-backup.com/，真实流量走反代。
+ *   · 用该公钥问官方 /v1/product_entitlement_mapping 得到权威映射：
+ *       com.foamzou.scrollie.{lifetime,monthly,yearly} -> ["Scrollie Pro"]
+ *   · 二进制里 setErrorHandler 出现 0 次，App 侧没有引用 verificationResult。
  *
- * 做法：只拦截 CustomerInfo 接口
- *   GET /v1/subscribers/<app_user_id>
- * 返回一个带有效 "Scrollie Pro" 权益的 CustomerInfo。
- * 为了兼容 App 可能用到的各种判断口径（entitlements.active /
- * activeSubscriptions / nonSubscriptions），三种痕迹都写进去了。
- * 不返回 x-signature 头（本来也签不出来）。
+ * 为什么脚本里还要再判一次 UA：
+ *   外层的 URL 正则只能区分域名和路径，而 RevenueCat 的 CustomerInfo 路径对
+ *   所有接入 RC 的 App 都是固定的 /v1/subscribers/<id>。如果哪天有人把这条规则
+ *   写宽了、或和别的 RC 插件叠在一起，脚本内部这道 UA 校验能保证「不是 Scrollie
+ *   的请求绝不改写」，不会误伤别的 App。
+ *
+ * 不返回 x-signature（签名覆盖 requestDate + 请求头哈希，客户端造不出；
+ * 缺签名比错签名更接近「未发起验证」）。
  */
 
 (function () {
@@ -31,24 +29,47 @@
     var PURCHASE_DATE = '2026-01-01T10:00:00Z';
     var EXPIRES_DATE  = '2099-12-31T23:59:59Z';
 
+    var HOSTS = /^https?:\/\/(?:api\.rc-backup\.com|api\.revenuecat\.com)\//i;
+    var PATH  = /^https?:\/\/(?:api\.rc-backup\.com|api\.revenuecat\.com)\/v1\/subscribers\/([^\/?#]+)(?:[?#].*)?$/i;
+    var UA    = /^Scrollie\//i;
+
     function nowISO() {
         return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
     }
 
+    function header(headers, want) {
+        var k;
+        if (!headers) return '';
+        for (k in headers) {
+            if (Object.prototype.hasOwnProperty.call(headers, k) &&
+                String(k).toLowerCase() === want) {
+                return String(headers[k]);
+            }
+        }
+        return '';
+    }
+
     var url    = ($request && $request.url)    ? String($request.url)    : '';
     var method = ($request && $request.method) ? String($request.method).toUpperCase() : 'GET';
+    var ua     = header($request && $request.headers, 'user-agent');
 
-    // 严格只匹配 CustomerInfo 本体，不要吞掉 /offerings、/virtual_currencies 等子路径
-    var m = url.match(/^https?:\/\/[^\/]+\/v1\/subscribers\/([^\/?#]+)(?:[?#].*)?$/i);
+    if (!HOSTS.test(url)) { $done({}); return; }
+    if (!UA.test(ua)) {
+        console.log('[Scrollie-Pro] PASS (UA=' + ua + ')');
+        $done({});
+        return;
+    }
+
+    // 只改 CustomerInfo 本体，不吞 /offerings、/v1/config/app 等子路径
+    var m = url.match(PATH);
     if (!m || method !== 'GET') {
-        $done({});      // 其它请求原样放行
+        console.log('[Scrollie-Pro] PASS ' + method + ' ' + url.split('?')[0]);
+        $done({});
         return;
     }
 
     var appUserId = m[1];
-    try {
-        appUserId = decodeURIComponent(appUserId);
-    } catch (e) { /* 保持原样 */ }
+    try { appUserId = decodeURIComponent(appUserId); } catch (e) { /* 原样 */ }
 
     var now = nowISO();
     var subscriber = {
@@ -64,7 +85,7 @@
         subscriptions: {}
     };
 
-    // 权益本体：expires_date = null 表示永久有效（终身）
+    // 权益本体：expires_date = null 表示永久有效
     subscriber.entitlements[ENTITLEMENT] = {
         expires_date: null,
         grace_period_expires_date: null,
@@ -78,7 +99,7 @@
         store: 'app_store'
     };
 
-    // 终身买断记录（对应 nonSubscriptions）
+    // 买断记录
     subscriber.non_subscriptions[LIFETIME_ID] = [{
         id: 'scrollie-lifetime-0001',
         is_sandbox: false,
@@ -87,7 +108,7 @@
         store_transaction_identifier: 'scrollie-lifetime-0001'
     }];
 
-    // 再挂一个远期有效的年度订阅（对应 activeSubscriptions，兜住以订阅判定的写法）
+    // 远期年度订阅：兜住以 activeSubscriptions 判定的写法
     subscriber.subscriptions[YEARLY_ID] = {
         billing_issues_detected_at: null,
         expires_date: EXPIRES_DATE,
@@ -102,11 +123,11 @@
         unsubscribe_detected_at: null
     };
 
+    console.log('[Scrollie-Pro] FORGE user=' + appUserId);
+
     $done({
         status: 200,
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             request_date: now,
             request_date_ms: Date.now(),

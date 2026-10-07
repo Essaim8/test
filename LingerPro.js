@@ -1,28 +1,23 @@
 /*
  * Linger (com.libowang.Linger.Global) —— Pro 解锁脚本
- * Target : api.revenuecat.com / api.rc-backup.com   (RevenueCat)
- * Type   : Loon http-response script (requires-body = true)
+ * Target : api.rc-backup.com / api.revenuecat.com   (RevenueCat)
+ * Type   : Loon response 脚本（新版语法，requires_body = true）
  *
  * 依据（IPA 里直接写着，不用猜）：
  *   Linger.app/Info.plist
  *     REVENUECAT_PUBLIC_SDK_KEY        = appl_IfYMhrtieEJqMlAETJfcDDeSgWZ
  *     REVENUECAT_ENTITLEMENT_ID        = "Pro access"
- *     REVENUECAT_DEFAULT_OFFERING_ID   = "default"
  *     REVENUECAT_USE_BACKUP_PROXY      = NO
- *   用该公钥问 RevenueCat 官方接口 /v1/product_entitlement_mapping 得到：
- *     linger_global_lifetime_standard_new / _weekly / _yearly /
- *     _yearly_discount / _yearly_original      → entitlements: ["Pro access"]
+ *   用该公钥问官方 /v1/product_entitlement_mapping：
+ *     linger_global_{lifetime_standard_new,weekly,yearly,...} -> ["Pro access"]
+ *   （注意：Linger 自己在 Info.plist 写了 USE_BACKUP_PROXY=NO，但二进制里仍带
+ *     api.rc-backup.com 字符串，所以两个域名都保留在匹配范围内。）
  *
- * 可干扰性：
- *   - 二进制里没有 errorHandler（App 没有注册 RC 的错误处理），
- *     App 侧也没有引用 entitlements.verificationResult；
- *   - RevenueCat 官方 Trusted Entitlements 文档明确：iOS 5.15+ 默认开启验签但
- *     "verification results are informational only"，SDK 不会自动拒绝未验签数据。
- *   ⇒ 伪造 CustomerInfo 有效。不返回 x-signature（本来也签不出来）。
+ * 为什么脚本里还要再判一次 UA：同 ScrolliePro.js —— 外层 URL 正则区分不了
+ * 不同的 RC App（路径对所有 RC App 都是 /v1/subscribers/<id>），脚本内部这道
+ * 校验保证不误伤别的 App。
  *
- * 做法：只拦 CustomerInfo 本体
- *   GET /v1/subscribers/<app_user_id>
- * 其余（/offerings、/product_entitlement_mapping、POST 等）全部原样放行。
+ * 不返回 x-signature。
  */
 
 (function () {
@@ -34,24 +29,48 @@
     var PURCHASE_DATE = '2026-01-01T10:00:00Z';
     var EXPIRES_DATE  = '2099-12-31T23:59:59Z';
 
+    var HOSTS = /^https?:\/\/(?:api\.rc-backup\.com|api\.revenuecat\.com)\//i;
+    var PATH  = /^https?:\/\/(?:api\.rc-backup\.com|api\.revenuecat\.com)\/v1\/subscribers\/([^\/?#]+)(?:[?#].*)?$/i;
+    // Linger 的 CFBundleName 是 Linger，CFBundleDisplayName 是「去留」。
+    // 日志里没有 Linger 自己发起的流量可以核对到底是哪个，两种都接受。
+    var UA    = /^(?:Linger|去留)\//i;
+
     function nowISO() {
         return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
     }
 
+    function header(headers, want) {
+        var k;
+        if (!headers) return '';
+        for (k in headers) {
+            if (Object.prototype.hasOwnProperty.call(headers, k) &&
+                String(k).toLowerCase() === want) {
+                return String(headers[k]);
+            }
+        }
+        return '';
+    }
+
     var url    = ($request && $request.url)    ? String($request.url)    : '';
     var method = ($request && $request.method) ? String($request.method).toUpperCase() : 'GET';
+    var ua     = header($request && $request.headers, 'user-agent');
 
-    // 只匹配 CustomerInfo 本体，不吞 /offerings、/virtual_currencies 等子路径
-    var m = url.match(/^https?:\/\/[^\/]+\/v1\/subscribers\/([^\/?#]+)(?:[?#].*)?$/i);
+    if (!HOSTS.test(url)) { $done({}); return; }
+    if (!UA.test(ua)) {
+        console.log('[Linger-Pro] PASS (UA=' + ua + ')');
+        $done({});
+        return;
+    }
+
+    var m = url.match(PATH);
     if (!m || method !== 'GET') {
+        console.log('[Linger-Pro] PASS ' + method + ' ' + url.split('?')[0]);
         $done({});
         return;
     }
 
     var appUserId = m[1];
-    try {
-        appUserId = decodeURIComponent(appUserId);
-    } catch (e) { /* 保持原样 */ }
+    try { appUserId = decodeURIComponent(appUserId); } catch (e) { /* 原样 */ }
 
     var now = nowISO();
     var subscriber = {
@@ -67,7 +86,6 @@
         subscriptions: {}
     };
 
-    // 权益本体：expires_date 为空 = 永久有效
     subscriber.entitlements[ENTITLEMENT] = {
         expires_date: null,
         grace_period_expires_date: null,
@@ -81,7 +99,6 @@
         store: 'app_store'
     };
 
-    // 买断记录（对应 nonSubscriptions）
     subscriber.non_subscriptions[LIFETIME_ID] = [{
         id: 'linger-lifetime-0001',
         is_sandbox: false,
@@ -90,7 +107,6 @@
         store_transaction_identifier: 'linger-lifetime-0001'
     }];
 
-    // 再挂一个远期年度订阅，兜住用 activeSubscriptions 判定的写法
     subscriber.subscriptions[YEARLY_ID] = {
         billing_issues_detected_at: null,
         expires_date: EXPIRES_DATE,
@@ -105,11 +121,11 @@
         unsubscribe_detected_at: null
     };
 
+    console.log('[Linger-Pro] FORGE user=' + appUserId);
+
     $done({
         status: 200,
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             request_date: now,
             request_date_ms: Date.now(),

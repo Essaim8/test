@@ -1,0 +1,11 @@
+#!name=Scrollie Pro 解锁
+#!desc=解锁 Scrollie (com.foamzou.scrollie) 的 Pro（HD 导出、去水印等）。原理：会员状态由 RevenueCat 提供，唯一权益是 "Scrollie Pro"；App 未启用强制验签，本插件把 CustomerInfo 接口返回成已购买终身 Pro。使用新版 Script 语法，条件里同时判 URL 与 User-Agent，和同域名的其它 RC 插件天然隔离（旧版 http-response 正则无法区分不同 App 的 /v1/subscribers/<id>，会互相抢占）。需开启 MitM。
+#!author=@Essaim
+#!icon=https://raw.githubusercontent.com/Essaim8/test/main/icon/scrollie.png
+#!other=Scrollie.v2.Loon.plugin
+
+[Script]
+response if ${url} ~= /^https?:\/\/(?:api\.rc-backup\.com|api\.revenuecat\.com)\/v1\/subscribers\//i && ${request.header['User-Agent']} ~= /^Scrollie\//i then script("https://raw.githubusercontent.com/Essaim8/test/main/ScrolliePro.js") with tag="Scrollie-Pro", timeout=30, requires_body=true
+
+[MitM]
+hostname = api.rc-backup.com, api.revenuecat.com
