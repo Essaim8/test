@@ -48,6 +48,7 @@
     var KEY_TOKEN  = 'nio_checkin_token';
     var KEY_DEVICE = 'nio_checkin_device';
     var KEY_LAST   = 'nio_checkin_last';   // 最近一次签到结果，用于 cron 去重/汇报
+    var KEY_TOKEN_SEEN = 'nio_checkin_token_seen';  // 是否已经就「抓到 token」通知过
 
     // 与 HAR 完全一致，不要"美化"
     var GW         = 'https://gateway-front-external.nio.com/moat/10086';
@@ -133,9 +134,18 @@
 
         // 每次经过都刷新，保证是最新 token
         if (tk && tk.length > 16) {
-            if (tk !== read(KEY_TOKEN)) {
-                write(tk, KEY_TOKEN);
+            var isNew = (tk !== read(KEY_TOKEN));
+            write(tk, KEY_TOKEN);
+            if (isNew) {
                 console.log('[nio] token 已更新，len=' + tk.length);
+                // 只在「首次抓到」和「换了 token（重新登录/换号）」时通知，避免每次请求都弹
+                var had = read(KEY_TOKEN_SEEN);
+                if (!had) {
+                    notify('登录态已捕获', '已拿到 Bearer token，可以定时签到了。\n以后不需要再手动打开 App。');
+                } else {
+                    notify('登录态已更新', 'token 变了（重新登录或切换账号），本地存档已刷新。');
+                }
+                write('1', KEY_TOKEN_SEEN);
             }
         }
         var dev = qs(url, 'device_id');
