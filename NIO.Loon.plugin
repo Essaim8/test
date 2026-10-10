@@ -1,5 +1,5 @@
 #!name=蔚来每日签到
-#!desc=蔚来 App(com.do1.WeiLaiApp) 每日自动签到。原理：抓包显示同一个签到动作有两条通道——native 的 POST app.nio.com/c/award_cn/checkin 带 sha256 sign 且服务端防重放(原样重放返回 sign_replay、只改 timestamp 返回 invalid sign)，签名无法离线复刻；而 webview 通道 gateway-front-external.nio.com/moat/10086/c/award_cn/checkin 客户端压根不传 sign，由网关自己补签，只认 authorization: Bearer。本插件用 http-request 从 App 自己的请求里抄下 Bearer token(或 URL 里的 accessToken)，再用 cron 定时走免签名的网关通道完成签到。不改安装包、无需越狱，但**使用前必须已登录，且 App 在本机启动过一次以抓到 token**。
+#!desc=蔚来 App(com.do1.WeiLaiApp) 每日自动签到。原理：抓包显示同一个签到动作有两条通道——native 的 POST app.nio.com/c/award_cn/checkin 带 sha256 sign 且服务端防重放(原样重放返回 sign_replay、只改 timestamp 返回 invalid sign)，签名无法离线复刻；而 webview 通道 gateway-front-external.nio.com/moat/10086/c/award_cn/checkin 客户端压根不传 sign，由网关自己补签，只认 authorization: Bearer。本插件用 http-request 从 App 自己的请求里抄下 token(authorization 头或 URL 里的 accessToken)，再用 cron 定时走免签名的网关通道完成签到。不改安装包、无需越狱。**使用前必须已登录，且 App 在本机启动过一次以抓到 token**；若迟迟没有「登录态已捕获」，点插件里的「蔚来-立即签到」手动触发一次，它会把诊断写进 Loon 日志。
 #!author=@Essaim
 #!icon=https://raw.githubusercontent.com/Essaim8/test/main/icon/nio.png
 #!other=NIO.Loon.plugin
@@ -9,6 +9,8 @@
 http-request ^https?:\/\/(?:app|gateway-front|api-fx|icar|matrix-api)[a-z-]*\.nio\.com\/ script-path=https://raw.githubusercontent.com/Essaim8/test/main/NIOCheckIn.js, timeout=10, tag=蔚来-登录态
 # 定时签到（默认每天 09:07，可自行改成想要的时间）
 cron "7 9 * * *" script-path=https://raw.githubusercontent.com/Essaim8/test/main/NIOCheckIn.js, tag=蔚来-每日签到
+# 手动触发：在 Loon 的插件详情页点一下即可立即签到/自检
+generic script-path=https://raw.githubusercontent.com/Essaim8/test/main/NIOCheckIn.js, tag=蔚来-立即签到, img-url=checkmark.circle.system
 
 [MitM]
 hostname = app.nio.com, gateway-front-external.nio.com, api-fx.nio.com, icar.nio.com, matrix-api.nio.com
