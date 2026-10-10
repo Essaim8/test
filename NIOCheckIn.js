@@ -2,8 +2,8 @@
  * 蔚来 App（com.do1.WeiLaiApp / NextevCar 6.9.0）—— 每日自动签到
  *
  * 这个脚本有两种触发方式，靠运行时特征自动区分：
- *   1) http-response  —— 蹭 App 自己的请求，把 Bearer token / device_id 落库
- *   2) cron           —— 到点自己去签到
+ *   1) http-request  —— 蹭 App 自己的请求，把 Bearer token 落库（不改请求）
+ *   2) cron          —— 到点自己去签到
  *
  * ── 为什么走 gateway-front-external 而不是 app.nio.com ────────────────
  * 抓包（695_1791597328027.har）里同一个签到动作被 App 发了两次：
@@ -29,12 +29,20 @@
  *     token 已失效 -> auth_failed；不带 token/仅探测 -> 请求被正常受理。
  *     => 这条路径只要 token，插件可以直接打。
  *
- * 结论：签到走 webview 网关通道，token 由 App 自己产生、脚本负责抄下来。
+ * ── token 从哪来（这一条踩过坑，别改回去）──────────────────────────────
+ * 第一版用 http-response 脚本读 $request.headers，真机上跑满 100 次
+ * （match / Trigger / Finished 各 100）却一次都没取到 token：Loon 官方文档里
+ * http-response 只承诺提供 $response.*，$request 仅写作"原请求信息"；而
+ * http-request 明确列出 $request.headers。所以采集必须放在 http-request 阶段。
+ *
+ * 另外真机日志（2026-10-10 10:21）暴露了第二个 token 源：URL query 里的
+ * accessToken 参数，例如
+ *   /api/1/message/update_client?...&accessToken=2.0m%2BNlGOt5y0L...%3D
+ * 它与 authorization 头的 Bearer 是同一个凭据。两个源都取，谁先出现用谁。
  *
  * ── 前提 ──────────────────────────────────────────────────────────────
  * 必须已登录，且 App 至少在装了本插件的设备上启动过一次（脚本要先把 token
- * 抄下来）。token 会过期（服务端会随登出/换账号立即作废），所以每次 App 发
- * 请求都会刷新本地存档。
+ * 抄下来）。token 会过期（登出/换账号立即作废），每次 App 发请求都会刷新存档。
  */
 
 (function () {
@@ -43,16 +51,16 @@
     /* ── 常量 ───────────────────────────────────────────────────────── */
 
     // 只有这些 host 的请求才值得抄 token，避免误伤别的 App
-    var HOSTS = /^https?:\/\/(?:app|gateway-front-external|api-fx|icar|matrix-api)\.nio\.com\//i;
+    var HOSTS = /^https?:\/\/(?:app|gateway-front|api-fx|icar|matrix-api)[a-z-]*\.nio\.com\//i;
 
     var KEY_TOKEN  = 'nio_checkin_token';
     var KEY_DEVICE = 'nio_checkin_device';
-    var KEY_LAST   = 'nio_checkin_last';   // 最近一次签到结果，用于 cron 去重/汇报
+    var KEY_LAST   = 'nio_checkin_last';   // 最近一次签到成功时间，用于 cron 去重/汇报
     var KEY_TOKEN_SEEN = 'nio_checkin_token_seen';  // 是否已经就「抓到 token」通知过
 
     // 与 HAR 完全一致，不要"美化"
-    var GW         = 'https://gateway-front-external.nio.com/moat/10086';
-    var SQUARE_URI = GW + '//n/c/award/square?event=checkin&collection_id=1843940587332317185';
+    var GW          = 'https://gateway-front-external.nio.com/moat/10086';
+    var SQUARE_URI  = GW + '//n/c/award/square?event=checkin&collection_id=1843940587332317185';
     var CHECKIN_URI = GW + '/c/award_cn/checkin?app_id=10086&timestamp=';
 
     // token 归 webview 通道用，UA 抄 HAR 里 idx 32 的那条
@@ -76,15 +84,46 @@
     // 从 URL query 里取字段
     function qs(url, name) {
         var m = new RegExp('[?&]' + name + '=([^&#]*)').exec(url || '');
-        return m ? decodeURIComponent(m[1]) : '';
+        if (!m) return '';
+        try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
     }
 
-    // 请求头大小写不敏感地取
+    /*
+     * 请求头取值。Loon 的原生 headers 是宿主对象，for...in 未必枚举得到，
+     * 所以先按常见大小写直取，再退回 Object.keys，最后兼容数组形态。
+     */
     function hdr(headers, name) {
         if (!headers) return '';
         var want = name.toLowerCase();
-        for (var k in headers) {
-            if (k.toLowerCase() === want) return headers[k] || '';
+
+        // 1) 直接下标（命中率最高，Loon 通常已小写）
+        var direct = ['', ''];
+        if (typeof headers === 'object' && !(headers instanceof Array)) {
+            var tries = [want, name, want.replace(/(^|-)([a-z])/g, function (m, a, b) {
+                return a + b.toUpperCase();
+            })];
+            for (var i = 0; i < tries.length; i++) {
+                var v = headers[tries[i]];
+                if (v != null && v !== '') return String(v);
+            }
+            // 2) 枚举键
+            try {
+                var keys = Object.keys(headers);
+                for (var j = 0; j < keys.length; j++) {
+                    if (String(keys[j]).toLowerCase() === want) {
+                        var v2 = headers[keys[j]];
+                        if (v2 != null && v2 !== '') return String(v2);
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 3) 数组形态 [{name, value}]
+        if (headers instanceof Array) {
+            for (var k = 0; k < headers.length; k++) {
+                var h = headers[k] || {};
+                if (String(h.name || '').toLowerCase() === want) return String(h.value || '');
+            }
         }
         return '';
     }
@@ -94,86 +133,68 @@
         var s = String(v || '').trim();
         if (!s) return '';
         var m = /^Bearer\s+(.+)$/i.exec(s);
-        return m ? m[1].trim() : '';
+        return m ? m[1].trim() : s;   // 有的接口直接给裸 token
     }
 
-    function base64Decode(s) {
-        var out = '';
-        try {
-            if (typeof atob === 'function') {
-                var raw = atob(s);
-                // UTF-8 还原
-                return decodeURIComponent(raw.split('').map(function (c) {
-                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-                }).join(''));
-            }
-        } catch (e) {}
-        return out;
+    // 凑一个像真 token 的值：HAR 抓到的形如 2.0 + 45 字符
+    function looksLikeToken(t) {
+        return !!t && t.length >= 20 && t.length <= 200;
     }
 
-    function parseBody(resp) {
-        if (!resp || !resp.body) return null;
-        var b = resp.body;
-        if (typeof b === 'object') return b;
-        var t = String(b).trim();
-        if (t.charAt(0) === '{' || t.charAt(0) === '[') {
-            try { return JSON.parse(t); } catch (e) {}
-        }
-        var dec = base64Decode(t);
-        if (dec) { try { return JSON.parse(dec); } catch (e) {} }
-        return null;
-    }
+    /* ── 分支 1：http-request，抄 token ─────────────────────────────── */
 
-    /* ── 分支 1：http-response，抄 token ─────────────────────────────── */
-
-    function responseJob() {
+    function requestJob() {
         var req = $request || {};
         var url = req.url || '';
-        var auth = hdr(req.headers, 'authorization');
-        var tk = bearer(auth);
 
-        // 每次经过都刷新，保证是最新 token
-        if (tk && tk.length > 16) {
+        // 源 1：authorization 头
+        var tk = bearer(hdr(req.headers, 'authorization'));
+
+        // 源 2：URL 里的 accessToken（真机日志里确实出现过）
+        if (!looksLikeToken(tk)) {
+            var fromUrl = qs(url, 'accessToken') || qs(url, 'access_token');
+            if (looksLikeToken(fromUrl)) tk = fromUrl;
+        }
+
+        if (looksLikeToken(tk)) {
             var isNew = (tk !== read(KEY_TOKEN));
             write(tk, KEY_TOKEN);
             if (isNew) {
-                console.log('[nio] token 已更新，len=' + tk.length);
-                // 只在「首次抓到」和「换了 token（重新登录/换号）」时通知，避免每次请求都弹
-                var had = read(KEY_TOKEN_SEEN);
-                if (!had) {
+                console.log('[nio] token 已捕获，len=' + tk.length);
+                if (!read(KEY_TOKEN_SEEN)) {
                     notify('登录态已捕获', '已拿到 Bearer token，可以定时签到了。\n以后不需要再手动打开 App。');
                 } else {
                     notify('登录态已更新', 'token 变了（重新登录或切换账号），本地存档已刷新。');
                 }
                 write('1', KEY_TOKEN_SEEN);
             }
+        } else {
+            // 只有首次排查时才需要看这行，抓到之后就安静了
+            if (!read(KEY_TOKEN_SEEN)) {
+                console.log('[nio] 本次请求未取到 token：' + url.slice(0, 80) +
+                            ' | auth头=' + (hdr(req.headers, 'authorization') ? '有' : '无'));
+            }
         }
+
         var dev = qs(url, 'device_id');
         if (dev && dev !== read(KEY_DEVICE)) write(dev, KEY_DEVICE);
 
-        // 顺手记一下用户是否手动签过，方便 cron 判断
-        var j = parseBody($response);
-        if (j && j.data && j.data.checked_in === true) {
-            write(nowSec(), KEY_LAST);
-            console.log('[nio] 观察到已签到：' + (j.data.tip || ''));
-        }
-
-        $done({});  // 绝不改响应
+        $done({});   // 绝不改请求
     }
 
     /* ── 分支 2：cron，执行签到 ─────────────────────────────────────── */
 
     function headers(token) {
         return {
-            'authorization':          'Bearer ' + token,
-            'content-type':           'application/x-www-form-urlencoded',
-            'accept':                 'application/json, text/plain, */*',
-            'accept-language':        'zh-CN,zh-Hans;q=0.9',
-            'user-agent':             UA_WEB,
-            'origin':                 'null',
-            'sec-fetch-site':         'cross-site',
-            'sec-fetch-mode':         'cors',
-            'sec-fetch-dest':         'empty'
+            'authorization':   'Bearer ' + token,
+            'content-type':    'application/x-www-form-urlencoded',
+            'accept':          'application/json, text/plain, */*',
+            'accept-language': 'zh-CN,zh-Hans;q=0.9',
+            'user-agent':      UA_WEB,
+            'origin':          'null',
+            'sec-fetch-site':  'cross-site',
+            'sec-fetch-mode':  'cors',
+            'sec-fetch-dest':  'empty'
         };
     }
 
@@ -264,11 +285,9 @@
 
     /* ── 入口 ───────────────────────────────────────────────────────── */
 
-    if (typeof $response !== 'undefined') {
-        // Loon 的 http-response 触发
-        responseJob();
+    if (typeof $request !== 'undefined' && $request) {
+        requestJob();     // http-request 触发
     } else {
-        // cron 触发：既没有 $request 也没有 $response
-        cronJob();
+        cronJob();        // cron 触发：既没有 $request 也没有 $response
     }
 })();
