@@ -1,0 +1,14 @@
+#!name=蔚来每日签到
+#!desc=蔚来 App(com.do1.WeiLaiApp) 每日自动签到。原理：抓包(/695_1791597328027.har)显示同一个签到动作有两条通道——native 的 POST app.nio.com/c/award_cn/checkin 带 sha256 sign 且服务端防重放(原样重放返回 sign_replay、改 timestamp 返回 invalid sign)，签名无法离线复刻；而 webview 通道 gateway-front-external.nio.com/moat/10086/c/award_cn/checkin 客户端压根不传 sign，由网关自己补签，只认 authorization: Bearer。本插件用 http-response 从 App 自己的请求里抄下 Bearer token，再用 cron 定时走免签名的网关通道完成签到。不改安装包、无需越狱，但**使用前必须已登录，且 App 在本机启动过一次以抓到 token**。
+#!author=@Essaim
+#!icon=https://raw.githubusercontent.com/Essaim8/test/main/icon/nio.png
+#!other=NIO.Loon.plugin
+
+[Script]
+# 抄 token：App 任何一次带 authorization 的请求都会刷新本地存档（脚本不改响应）
+http-response ^https?:\/\/(?:app|gateway-front-external|api-fx|icar|matrix-api)\.nio\.com\/ script-path=https://raw.githubusercontent.com/Essaim8/test/main/NIOCheckIn.js, requires-body=true, timeout=30, tag=蔚来-登录态
+# 定时签到（默认每天 09:07，可自行改成想要的时间）
+cron "7 9 * * *" script-path=https://raw.githubusercontent.com/Essaim8/test/main/NIOCheckIn.js, tag=蔚来-每日签到
+
+[MitM]
+hostname = app.nio.com, gateway-front-external.nio.com, api-fx.nio.com, icar.nio.com, matrix-api.nio.com
