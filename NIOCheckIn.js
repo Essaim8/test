@@ -2,8 +2,10 @@
  * 蔚来 App（com.do1.WeiLaiApp / NextevCar 6.9.0）—— 每日自动签到
  *
  * 触发方式（脚本自己区分）：
- *   1) http-request —— 蹭 App 自己的请求：抄 token；若今天还没签，就当场签掉
- *   2) cron         —— 到点用存档 token 补签（App 当天没打开时的兜底）
+ *   1) http-request —— 只在 App 启动时那两条带 token 的心跳请求上抄 token。
+ *                      【只记账、不发任何网络请求，$done 立刻放行】，
+ *                      避免卡住 App 自己的请求（这是"阻断其他功能"的根因）。
+ *   2) cron         —— 到点用存档 token 签到（主执行路径）
  *   3) generic      —— Loon 里手动点「蔚来-立即签到」立即执行/自检
  *
  * ══ 为什么走 gateway-front-external 而不是 app.nio.com ══════════════════
@@ -278,7 +280,7 @@
 
     /* ── 分支 1：http-request ───────────────────────────────────────── */
 
-    function requestJob() {
+    function requestJob(release) {
         var req = $request || {};
         var url = req.url || '';
 
@@ -299,19 +301,14 @@
             if (dev) write(dev, K_DEVICE);
 
             /*
-             * 主路径：今天还没签成 → 当场签（token 此刻一定新鲜）。
-             * 只在 App 启动时的两条后台心跳请求上触发（/api/1/message/update_client
-             * 与 bind_client）——它们不阻塞界面，且 URL 里就带 accessToken；
-             * 绝不挂在用户要等的业务请求上，避免把 App 卡住。
+             * 【重要】这里只记账，绝不做任何网络请求。
+             *
+             * Loon 的 http-request 脚本必须等所有异步任务回调后才能 $done()，
+             * 而 $done() 之前 App 这条请求是被挂住的。早先版本在这里直接发起签到
+             * （$httpClient 两次往返，最长 15s+15s），等于把 App 自己的请求卡死，
+             * 表现就是"其他功能不正常"。签到一律交给 cron / 手动按钮独立完成。
              */
-            var isHeartbeat = /\/api\/1\/message\/(update_client|bind_client)\b/.test(url);
-            if (isHeartbeat && !doneToday() && read(K_TRY) !== today()) {
-                write(today(), K_TRY);   // 先占位，防止同一批请求反复触发
-                say('今日未签，当场执行（heartbeat）');
-                runCheckIn(tk, true, function () { $done({}); });
-                return;
-            }
-            $done({});
+            release();
             return;
         }
 
@@ -324,7 +321,7 @@
                 ' | keys=[' + String(headerKeys(req.headers)).slice(0, 240) + ']' +
                 ' | 存档=' + (read(K_TOKEN) ? read(K_TOKEN).length : 0));
         }
-        $done({});
+        release();
     }
 
     /* ── 分支 2/3：cron 与 generic ──────────────────────────────────── */
@@ -349,11 +346,27 @@
 
     /* ── 入口 ───────────────────────────────────────────────────────── */
 
-    if (typeof $request !== 'undefined' && $request && ($request.url || $request.headers)) {
-        requestJob();
-    } else if (typeof $environment !== 'undefined' && $environment) {
-        timerJob('manual');
-    } else {
-        timerJob('cron');
+    var released = false;
+    function release() { if (!released) { released = true; try { $done({}); } catch (e) {} } }
+
+    /*
+     * 整个入口都包在 try 里：http-request 阶段任何异常若不 $done()，
+     * Loon 会一直挂着 App 那条请求（最长到 rule timeout），
+     * 用户看到的就是"其他功能不正常"。所以无论怎样都必须放行且只放行一次。
+     */
+    try {
+        var isReq  = (typeof $request !== 'undefined') && $request && ($request.url || $request.headers);
+        var isEnv  = (typeof $environment !== 'undefined') && $environment;
+        if (isReq) {
+            requestJob(release);
+        } else if (isEnv) {
+            timerJob('manual');
+        } else {
+            timerJob('cron');
+        }
+    } catch (e) {
+        say('入口异常已放行：' + (e && e.message ? e.message : String(e)));
+        // 只有 http-request 阶段才需要 release；定时器阶段本就该正常结束
+        try { release(); } catch (x) {}
     }
 })();
