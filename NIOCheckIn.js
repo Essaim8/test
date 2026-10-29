@@ -175,10 +175,32 @@
         };
     }
 
+    /*
+     * Loon 的 timeout 单位是【毫秒】(文档默认 5000)，不是秒。
+     * 之前写成 timeout:12 等于 12ms，必然瞬间超时 —— 这是"查询失败"的真凶。
+     */
+    var NET_TIMEOUT = 15000;
+
+    // $httpClient 失败时 error 是【字符串】，不是 Error 对象，不能取 .message
+    function errText(e) {
+        if (!e) return '';
+        if (typeof e === 'string') return e;
+        if (e.message) return String(e.message);
+        try { return JSON.stringify(e); } catch (x) { return String(e); }
+    }
+
+    // 状态码：正常是 resp.status，个别版本给 statusCode，两个都认
+    function httpCode(resp) {
+        if (!resp) return 0;
+        var c = resp.status != null ? resp.status : resp.statusCode;
+        return c != null ? Number(c) : 0;
+    }
+
     function fetchStatus(token, cb) {
-        $httpClient.get({ url: SQUARE_URI, headers: gwHeaders(token), timeout: 12 }, function (err, resp, data) {
-            if (err) return cb(err, null, data);
-            if (!resp || resp.status !== 200) return cb(new Error('HTTP ' + (resp ? resp.status : '?')), null, data);
+        $httpClient.get({ url: SQUARE_URI, headers: gwHeaders(token), timeout: NET_TIMEOUT }, function (err, resp, data) {
+            if (err) return cb(new Error(errText(err) || 'request failed'), null, data);
+            var code = httpCode(resp);
+            if (code !== 200) return cb(new Error('HTTP ' + (code || '(no status)')), null, data);
             var j = null; try { j = JSON.parse(data); } catch (e) {}
             cb(null, j, data);
         });
@@ -189,7 +211,7 @@
             url: CHECKIN_URI + nowSec(),
             headers: gwHeaders(token),
             body: 'event=checkin',
-            timeout: 12
+            timeout: NET_TIMEOUT
         }, function (err, resp, data) {
             var j = null; try { j = JSON.parse(data); } catch (e) {}
             cb(err, resp, j, data);
@@ -203,8 +225,9 @@
     function runCheckIn(token, quiet, cb) {
         fetchStatus(token, function (e1, st, raw1) {
             if (e1) {
-                say('状态查询失败：' + e1.message + ' | ' + String(raw1 || '').slice(0, 120));
-                notify('查询失败', '状态接口：' + e1.message);
+                var msg1 = errText(e1) || '未知错误';
+                say('状态查询失败：' + msg1 + ' | body=' + String(raw1 || '').slice(0, 150));
+                notify('查询失败', '状态接口：' + msg1 + '\n' + String(raw1 || '').slice(0, 100));
                 return cb('error');
             }
             say('状态 result_code=' + (st && st.result_code) +
@@ -231,7 +254,7 @@
 
             postCheckIn(token, function (e2, resp, j, raw) {
                 if (e2) {
-                    notify('签到失败', '网络错误：' + e2.message);
+                    notify('签到失败', '网络错误：' + (errText(e2) || '未知错误'));
                     return cb('error');
                 }
                 if (j && j.result_code === 'success' && j.data) {
@@ -242,7 +265,7 @@
                         '，累计 ' + ((d.stats && d.stats.accumulate_days) || '?') + ' 天。');
                     return cb('ok');
                 }
-                var why = (j && (j.message || j.result_code)) || ('HTTP ' + (resp ? resp.status : '?'));
+                var why = (j && (j.message || j.result_code)) || ('HTTP ' + (httpCode(resp) || '(no status)'));
                 say('签到未成功：' + String(raw || '').slice(0, 200));
                 notify('签到失败', why + '\n' + String(raw || '').slice(0, 120));
                 cb('fail');
