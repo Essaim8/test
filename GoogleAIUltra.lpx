@@ -1,0 +1,11 @@
+#!name=Google AI Ultra 1个月免费试用
+#!desc=MITM one.google.com/ai? 接口，把 Ultra 标准套餐代码替换为「1 个月免费试用」收购代码。需 Loon 已开启 MITM 并安装信任证书；建议用未领过该试用的 Apple 小号。
+#!author=@Essaim
+#!icon=https://raw.githubusercontent.com/Essaim8/test/main/icon/google-ai-ultra.png
+#!other=GoogleAIUltra.Loon.plugin
+
+[Script]
+http-response ^https?:\/\/one\.google\.com\/ai(\?|$) script-path=https://raw.githubusercontent.com/Essaim8/test/main/GoogleAIUltra.js, requires-body=true, timeout=30, tag=GoogleOne-AIUltra
+
+[MitM]
+hostname = one.google.com
