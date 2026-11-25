@@ -14,15 +14,21 @@
   if (!/^https?:\/\/one\.google\.com\/ai(\?|$)/i.test(url)) { $done({}); return; }
 
   var body = ($response && typeof $response.body === "string") ? $response.body : "";
+  var ct = ($response && $response.headers && ($response.headers["content-type"] || $response.headers["Content-Type"])) || "";
   var codes = body.match(/g1\.[A-Za-z0-9_.]+/g) || [];
   var uniq = [];
   for (var i = 0; i < codes.length; i++) { if (uniq.indexOf(codes[i]) === -1) uniq.push(codes[i]); }
+  var hit = body.match(/[A-Za-z0-9_.]*(?:1month|eft|acq|trial)[A-Za-z0-9_.]*/gi) || [];
+
+  // 判断是 JSON 还是二进制(protobuf 等)：二进制里会有大量不可打印字符
+  var printable = (body.slice(0, 400).replace(/[^\x20-\x7e\r\n\t]/g, "")).length;
+  var looksJson = /^\s*[\{\[]/.test(body);
 
   console.log("[G1Diag] " + (($request && $request.method) || "") + " " + url);
+  console.log("[G1Diag] content-type=" + ct + " looksJSON=" + looksJson + " printableRatio=" + (printable / Math.min(400, Math.max(1, body.length))).toFixed(2));
   console.log("[G1Diag] len=" + body.length + " codes=" + JSON.stringify(uniq));
-  // 顺便看看是否有 1month / eft / acq 相关字样
-  var hit = body.match(/[A-Za-z0-9_.]*(?:1month|eft|acq|trial)[A-Za-z0-9_.]*/gi) || [];
   console.log("[G1Diag] trialish=" + JSON.stringify(hit.slice(0, 20)));
+  console.log("[G1Diag] preview=" + body.slice(0, 160).replace(/[^\x20-\x7e]/g, "."));
 
   $done({}); // 不改动
 })();
